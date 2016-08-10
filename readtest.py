@@ -25,6 +25,9 @@ def onselect(eclick, erelease):
     #print("("+eclick.xdata+","+eclick.ydata+")")
     print(' startposition : (%f, %f)' % (eclick.xdata, eclick.ydata))
     print(' endposition   : (%f, %f)' % (erelease.xdata, erelease.ydata))
+    print('*******************')
+    if(len(names)>0):
+        print(names.pop())
     x1=eclick.xdata
     y1=eclick.ydata
     x2=erelease.xdata
@@ -36,42 +39,44 @@ def onselect(eclick, erelease):
     else:
         plt.close(fig)
 
+def getDataAndMask(f):
+    '''
+    Given a hdf5 file f, save the corresponding datasets marked with data and MASK contained in the groups of the root
+    '''
+    #TODO (maybe a configuration file to decide which samples are chosen?)
+    #example Argento_13_new4 and Argento_15_new
+    data=[]
+    mask=[]
+    names=[]
+    for g in f:
+        group=f[g]
+        names.append(g)
+        for dataset in group:
+            if "data" in dataset:
+                data.append(group[dataset])
+            elif "MASK" in dataset:
+                mask.append(group[dataset])
+    return data,mask,names
+
 if __name__=="__main__":
     print("Inizio programma...")
     #read file
     f = h5py.File("../sample.h5", "r")
-    #init variables (in the future a list of all images?)
-    #(maybe a configuration file to decide which samples are chosen?)
-    group13=group15=data13=data15=mask13=mask15=None
     #explore dataset
-    for group in f:
-        if "13" in group:
-            group13=f[group]
-            for dataset in group13:
-                if "data" in dataset:
-                    data13=group13[dataset]
-                if "MASK" in dataset:
-                    mask13=group13[dataset]
-        if "15" in group:
-            group15=f[group]
-            for dataset in group15:
-                if "data" in dataset:
-                    data15=group15[dataset]
-                if "MASK" in dataset:
-                    mask15=group15[dataset]
+    data,mask,names=getDataAndMask(f)
+    
     #init window
     fig = plt.figure()
     ax = fig.add_subplot(111)
-    #convert to numpy array
-    data13=data13[()]
-    data15=data15[()]
-    #filter out outlier values for better colormap (TODO use something better, maybe there is a mask
-    #or you can use a custom colormap without touching the data)
-    data13[(data13<-0.4) | (data13>0.4)]=np.nan
-    data15[(data15<-0.4) | (data15>0.4)]=np.nan #RuntimeWarning? 15 si ma 13 no, boh!
-    #apply mask to images
-    images.append(ma.masked_array(data13,mask=mask13))
-    images.append(ma.masked_array(data15,mask=mask15))
+    for data1 in data:
+        #convert to numpy array
+        data1=data1[()]
+        #filter out outlier values for better colormap (TODO use something better, maybe there is a mask
+        #or you can use a custom colormap without touching the data)
+        data1[(data1<-0.4) | (data1>0.4)]=np.nan #RuntimeWarning? Tutti tranne il primo, boh!
+        #apply mask to images
+        mask1=mask.pop(0)
+        images.append(ma.masked_array(data1,mask=mask1))
     #show the first image
     plt.imshow(images.pop())
     #create the rectangle selector with the callback
@@ -79,6 +84,7 @@ if __name__=="__main__":
         ax, onselect, drawtype='box',
         rectprops = dict(facecolor='red', edgecolor = 'black', alpha=0.5, fill=False))
     #show the windows
+    print(names.pop())
     plt.show()
     #print results
     print(selected_regions)
