@@ -1,5 +1,7 @@
 '''
 h5py file reading test, data visualization test, region selection test
+TODO better colormap
+TODO solve glitch on rectangle selector
 '''
 
 import h5py
@@ -88,5 +90,6 @@ if __name__=="__main__":
     plt.show()
     #print results
     print(selected_regions)
+    #to take a subregion, just do x[1:3,1:3] for example
     print("Fine programma...")
 
