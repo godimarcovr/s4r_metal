@@ -10,6 +10,7 @@ class TrainingSetCreator:
         regions: dictionary of tuples (x1,y1,x2,y2) which is the rectangle selection
         patch_dim: a integer which represents the square side dimension
         target_dict: dictionary with names as keys and their classification number as value
+        getrotated:a flag that activates the artificial increase of data patches by rotating existing patches
         '''
         self.data=raw_data
         self.names=names
@@ -20,29 +21,48 @@ class TrainingSetCreator:
         self.compileIndexAccumulator()
     
     def getNumberOfAccPatches(self,n):
+        '''
+        Returns the total number of patches for the first n datasets
+        '''
+        #starts from 0
         count=0
         i=0
+        #for every dataset
         for key in self.names:
+            #but only for the first n
             if i<n:
                 i+=1
             else:
                 break
+            #get the region to be taken
             x1,y1,x2,y2=self.regions[key]
             #rectangle = self.data[key][x1:x2, y1:y2]
+            #total number of rows in the rectangle
             nRows=x2-x1+1
+            #total number of rows of patches
             nRowsPatch=nRows-(self.patch_dim-1)
+            #total number of columns in the rectangle
             nCols=y2-y1+1
+            #total number of columns of patches
             nColsPatch=nCols-(self.patch_dim-1)
+            #add it to the count
             count+=nRowsPatch*nColsPatch
             #count+=(rectangle.shape[0]-self.patch_dim+1)*(rectangle.shape[1]-self.patch_dim+1)
         return count
     
     def compileIndexAccumulator(self):
+        '''
+        Save in self.indacc[i] the total number of patches for the first i+1 datasets for every i
+        '''
         self.indacc=[]
+        #for every dataset
         for i in range(len(self.names)):
             self.indacc.append(self.getNumberOfAccPatches(i+1))
 
     def patchBinarySearch(self,i,start,end):
+        '''
+        Currently not used, not even tested
+        '''
         if(start>=end):
             return start
         if(start+1==end):
@@ -53,26 +73,44 @@ class TrainingSetCreator:
 
     
     def getPatchesFromDataset(self, datasetindex, indexlist):
+        '''
+        Yields the patches corresponding to the indexes in indexlist starting from the datasetindex-th dataset
+        '''
+        #the upper index limit is calculated using the accumulator indacc
         totpatches=self.indacc[0] if datasetindex==0 else self.indacc[datasetindex]-self.indacc[datasetindex-1]
+        #get the name of the given dataset
         key=self.names[datasetindex]
+        #get the region to be considered
         x1,y1,x2,y2=self.regions[key]
+        #total number of rows in the rectangle
         nRows=x2-x1+1
+        #total number of rows of patches
         nRowsPatch=nRows-(self.patch_dim-1)
+        #total number of columns in the rectangle
         nCols=y2-y1+1
+        #total number of columns of patches
         nColsPatch=nCols-(self.patch_dim-1)
-        assert totpatches==nRowsPatch*nColsPatch
+        #assert totpatches==nRowsPatch*nColsPatch
         for ind in indexlist:
             #assert ind<totpatches
             riga=ind//nColsPatch
             colonna=ind%nColsPatch
+            #ritorna la patch
             yield self.data[key][x1+riga:x1+riga+self.patch_dim,y1+colonna:y1+colonna+self.patch_dim]
     
     def getPatches(self, indexlist_list):
+        '''
+        Yields the patches corresponding to the indexes in indexlist from each dataset 
+        (include even empty lists if not interested in some datasets)
+        '''
         for i in range(len(indexlist_list)):
             for patch in self.getPatchesFromDataset(i,indexlist_list[i]):
                 yield patch,self.target_dict[self.names[i]]
 
     def getAllPatches(self):
+        '''
+        Yields all the patches from the selected regions
+        '''
         indexlist_list=[]
         for i in range(len(self.names)):
             indexlist_list.append(range(self.indacc[0] if i==0 else self.indacc[i]-self.indacc[i-1]))
