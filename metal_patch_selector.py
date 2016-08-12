@@ -52,7 +52,7 @@ class PatchSelector:
         y1=eclick.ydata
         x2=erelease.xdata
         y2=erelease.ydata
-        self.selected_regions[self.current_k]=(x1,y1,x2,y2)
+        self.selected_regions[self.current_k]=(int(x1),int(y1),int(x2),int(y2))
         if self.images:
             plt.cla()
             self.current_k,v=self.images.popitem()
@@ -92,9 +92,8 @@ class PatchSelector:
         return self.selected_regions
 
         
-        
 if __name__=="__main__":
     #test
-    p=PatchSelector("../sample.h5",whitelist=['Argento_13_new4', 'Argento_15_new'])
+    p=PatchSelector("../sample.h5", whitelist=['Argento_13_new4', 'Argento_15_new'], allow_print=False)
     print(p.names)
     print(p.chooseRegions())
