@@ -1,5 +1,6 @@
 import numpy as np
 from metal_patch_selector import *
+from random import shuffle
 
 class TrainingSetCreator:
 
@@ -59,6 +60,7 @@ class TrainingSetCreator:
         for i in range(len(self.names)):
             self.indacc.append(self.getNumberOfAccPatches(i+1))
 
+    
     def patchBinarySearch(self,i,start,end):
         '''
         Currently not used, not even tested
@@ -117,6 +119,48 @@ class TrainingSetCreator:
         for i,j in self.getPatches(indexlist_list):
             yield i,j
 
+    def getMiniBatches(self, datasetindex, indexlist, minibatch_dim):
+        '''
+        datasetindex: the index in the self.names, indicates which dataset is considered
+        indexlist: is the list of indices which are requested
+        minibatch_dim: is the dimension of the single minibatch
+
+        by iterating on the call, a sequence of minibatches is returned
+        '''
+        #assert len(indexlist)%minibatch_dim==0
+        for i in range(len(indexlist)//minibatch_dim):
+            l=[]
+
+            if(((i+1)*minibatch_dim)>len(indexlist)):
+                for patch in self.getPatchesFromDataset(datasetindex, indexlist[i*minibatch_dim:]):
+                    l.append(patch)
+            else:
+                for patch in self.getPatchesFromDataset(datasetindex, indexlist[i*minibatch_dim:(i+1)*minibatch_dim]):
+                    l.append(patch)
+            yield l
+    
+    def getTrainingTestingIndices(self,training_percent):
+        '''
+        training_percent: is the percentage of training elements required, the remaining are testing
+
+        returns two lists of indices train and test. in train[i] we have the indices of the training set of the dataset i
+                the remaining ones are testing set
+        '''
+        retTrain=[]
+        retTest=[]
+        for datasetindex in range(len(self.names)):
+            #the upper index limit is calculated using the accumulator indacc
+            totpatches=self.indacc[0] if datasetindex==0 else self.indacc[datasetindex]-self.indacc[datasetindex-1]
+            indices = np.arange(totpatches)
+            np.random.shuffle(indices)
+            indices=indices.tolist()
+            training_quantity=int(training_percent*totpatches)
+            testing_quantity=totpatches-training_quantity
+            retTrain.append(indices[:training_quantity])
+            retTest.append(indices[training_quantity:])
+        return retTrain,retTest
+
+
 if __name__=="__main__":
     #test1
     names=["a","b"]
@@ -133,6 +177,7 @@ if __name__=="__main__":
     for i,j in tsc.getPatches([[0,7],[1]]):
         print(j)
         print(i)
+
     #test 3
     p=PatchSelector("../sample.h5", whitelist=['Argento_13_new4', 'Argento_15_new'], allow_print=False)
     print(p.names)
@@ -140,6 +185,14 @@ if __name__=="__main__":
     raw_data=p.data
     target_dict={'Argento_13_new4':13,'Argento_15_new':15}
     tsc=TrainingSetCreator(p.names,raw_data,regions,3,target_dict)
+    print("asd")
+    tr,te=tsc.getTrainingTestingIndices(0.99999)
+    print(te)
+    for l in tsc.getMiniBatches(0,te[0],2):
+        for p in l:
+            print(p)
+
+    #test 4
     for i,j in tsc.getAllPatches():
         print(j)
         print(i)
