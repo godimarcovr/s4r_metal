@@ -1,0 +1,19 @@
+	p=mps.PatchSelector("../sample.h5", whitelist=['Argento_13_new4', 'Argento_15_new'], allow_print=False)
+    #print(p.names)
+    regions=p.chooseRegions()
+    raw_data=p.data
+    target_dict={'Argento_13_new4':0,'Argento_15_new':1}
+    tsc=tscreator.TrainingSetCreator(p.names,raw_data,regions,32,target_dict,step=8)
+    #tr,te=tsc.getTrainingTestingIndices(0.85)
+    print("Start NN creation")
+    nn=NeuralNetCreator((None,1,32,32),2,[5,5],fully_con=[(256,0.5),(256,0.5),(128,0.5)],num_filters=32)
+    print("NN created, starting training...")
+    nn.train2(tsc,100,0.80,0.10,0.10)
+    #nn.train(tsc,100,0.85)
+    #nn.train_test(10)
+    #PESARE MEDIA LOCALE
+
+****
+Final results:
+  test loss:			0.206642
+  test accuracy:		91.6688 %

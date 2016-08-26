@@ -48,10 +48,10 @@ class PatchSelector:
         #print(' startposition : (%f, %f)' % (eclick.xdata, eclick.ydata))
         #print(' endposition   : (%f, %f)' % (erelease.xdata, erelease.ydata))
         #print('*******************')
-        x1=eclick.xdata
-        y1=eclick.ydata
-        x2=erelease.xdata
-        y2=erelease.ydata
+        x1=eclick.ydata
+        y1=eclick.xdata
+        x2=erelease.ydata
+        y2=erelease.xdata
         self.selected_regions[self.current_k]=(int(x1),int(y1),int(x2),int(y2))
         if self.images:
             plt.cla()
