@@ -32,12 +32,13 @@ class NeuralNetCreator:
             self.network = lasagne.layers.Conv2DLayer(self.network, num_filters=self.num_filters, 
                             filter_size=(patch_size, patch_size), 
                             nonlinearity=lasagne.nonlinearities.rectify, W=lasagne.init.GlorotUniform())
-            self.network = lasagne.layers.MaxPool2DLayer(self.network, pool_size=(pool_size, pool_size))
+            #self.network = lasagne.layers.MaxPool2DLayer(self.network, pool_size=(pool_size, pool_size))
         for num_units, dropout in self.fully_con:
             self.network = lasagne.layers.DenseLayer(lasagne.layers.dropout(self.network, p=dropout),
                                 num_units=num_units, nonlinearity=lasagne.nonlinearities.rectify)
-
-        self.network = lasagne.layers.DenseLayer(lasagne.layers.dropout(self.network, p=self.fully_con[-1][1]),
+        
+        self.network = lasagne.layers.DenseLayer(lasagne.layers.dropout(self.network,
+                                         p=self.fully_con[-1][1] if len(self.fully_con)>0 else 0.5),
                             num_units=self.num_outputs, nonlinearity=lasagne.nonlinearities.softmax)
 
     def prepareTraining(self):
@@ -113,6 +114,10 @@ class NeuralNetCreator:
         testing_set=partitions[1]
         validation_set=partitions[2]
         for epoch in range(num_epochs):
+            #change during debug
+            flag=False
+            if flag:
+                break
             np.random.shuffle(training_set)
             # In each epoch, we do a full pass over the training data:
             train_err = 0
@@ -141,6 +146,8 @@ class NeuralNetCreator:
             print("  validation loss:\t\t{:.6f}".format(val_err / val_batches))
             print("  validation accuracy:\t\t{:.4f} %".format(val_acc / val_batches * 100))
             print("****")
+            if flag:
+                break
         test_err = 0
         test_acc = 0
         test_batches = 0
@@ -160,14 +167,20 @@ if __name__=="__main__":
     regions=p.chooseRegions()
     raw_data=p.data
     target_dict={'Argento_13_new4':0,'Argento_15_new':1}
-    tsc=tscreator.TrainingSetCreator(p.names,raw_data,regions,16,target_dict,step=16,transformdata=True,subtractmean=True)
+    tsc=tscreator.TrainingSetCreator(p.names,raw_data,regions,64,target_dict,step=8
+            ,transformdata=True,subtractmean=True,getrotated=True,savepatches=True)
     #new interval is to be
-    tsc.setTransform((-0.4,0.4),(0.0,5.0))
+    tsc.setTransform((-0.4,0.4),(0.0,1.0))
     #tr,te=tsc.getTrainingTestingIndices(0.85)
     print("Start NN creation")
-    nn=NeuralNetCreator((None,1,16,16),2,[5],fully_con=[(256,0.5),(256,0.5)],num_filters=32)
+    nn=NeuralNetCreator((None,1,64,64),2,[5],fully_con=[(256,0.5),(256,0.5)],num_filters=16)
     print("NN created, starting training...")
-    nn.train2(tsc,100,0.80,0.10,0.10)
+    nn.train2(tsc,1000,0.80,0.10,0.10)
     #nn.train(tsc,100,0.85)
     #nn.train_test(10)
-    
+
+
+    #DA FARE
+    #inganna con stesso campione e vedi se trova differenze (non funziona)
+    #provo con altri campioni (funziona)
+    #17 non trattato (confronto trattato e non trattato)

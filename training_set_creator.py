@@ -5,7 +5,7 @@ from random import shuffle
 class TrainingSetCreator:
 
     def __init__(self, names, raw_data, regions, patch_dim, target_dict,getrotated=False
-                        , step=1, transformdata=False, subtractmean=False):
+                        , step=1, transformdata=False, subtractmean=False, savepatches=False):
         '''
         names: list of strings which are the names of the datasets (to enforce an order)
         raw_data: dictionary with names as keys and images as values
@@ -23,11 +23,14 @@ class TrainingSetCreator:
         self.step=step
         self.nPatch=[None]*(len(self.names))
         self.transformdata=transformdata
+        self.getrotated=getrotated
         if(self.transformdata):
             def f(x):
                 return x
             self.transform=np.vectorize(f,otypes=[np.float64])
         self.subtractmean=subtractmean
+        self.savepatches=savepatches
+        self.patchdict={}
         #self.max=100.0
 
         self.compileIndexAccumulator()
@@ -120,30 +123,50 @@ class TrainingSetCreator:
         
         patch_n_el=self.patch_dim*self.patch_dim
         for ind in indexlist:
+            if self.savepatches:
+                if (datasetindex,ind) in self.patchdict:
+                    yield self.patchdict[(datasetindex,ind)]
+                    continue
+                else:
+                    ind2=ind
+            if self.getrotated:
+                totpatches=self.indacc[0] if datasetindex==0 else self.indacc[datasetindex]-self.indacc[datasetindex-1]
+                nRot=ind//totpatches
+                ind=ind%totpatches
             #assert ind<totpatches
             riga=(ind//nColsPatch)*self.step
             colonna=(ind%nColsPatch)*self.step
             #ritorna la patch
             #TODO rifai con un solo yield patch in fondo e fai patch=None se serve
-            patch=self.data[key][np.newaxis, x1+riga:x1+riga+self.patch_dim, y1+colonna:y1+colonna+self.patch_dim]
+            if self.getrotated:
+                patch=self.data[key][x1+riga:x1+riga+self.patch_dim, y1+colonna:y1+colonna+self.patch_dim]
+                patch=np.rot90(patch,k=nRot)
+                patch=patch[np.newaxis,:,:]
+            else:
+                patch=self.data[key][np.newaxis, x1+riga:x1+riga+self.patch_dim, y1+colonna:y1+colonna+self.patch_dim]
             if patch.size<patch_n_el or np.isnan(np.sum(patch)):
                 yield None
             else:
+                if self.transformdata:
+                    if (not ((patch >= self.oldinterval[0]).all() and (patch <= self.oldinterval[1]).all())):
+                        yield None
+                        continue
+                    if(onlyvalid):
+                        yield patch
+                        continue
+                    patch=self.transform(patch)
                 if(onlyvalid):
                     yield patch
-                else:
-                    if self.transformdata:
-                        if (not ((patch >= self.oldinterval[0]).all() and (patch <= self.oldinterval[1]).all())):
-                            yield None
-                            continue
-                        patch=self.transform(patch)
-                    if(self.subtractmean):
-                        a=np.mean(patch,dtype=np.float64)
-                        a=np.full(patch.shape,a)
-                        patch=patch-a
-                    #if self.max>patch.min():
-                    #    self.max=patch.min()
-                    yield patch
+                    continue
+                if(self.subtractmean):
+                    a=np.mean(patch,dtype=np.float64)
+                    a=np.full(patch.shape,a)
+                    patch=patch-a
+                #if self.max>patch.min():
+                #    self.max=patch.min()
+                if self.savepatches:
+                    self.patchdict[(datasetindex,ind2)]=patch
+                yield patch
     
     def getPatches(self, indexlist_list):
         '''
@@ -182,15 +205,15 @@ class TrainingSetCreator:
                     targets.append(self.target_dict[self.names[datasetindex]])
                     
             yield mb,targets
-
+    '''
     def getMiniBatches(self, datasetindex, indexlist, minibatch_dim):
-        '''
+        
         datasetindex: the index in the self.names, indicates which dataset is considered
         indexlist: is the list of indices which are requested
         minibatch_dim: is the dimension of the single minibatch
 
         by iterating on the call, a sequence of minibatches is returned
-        '''
+        
         #assert len(indexlist)%minibatch_dim==0
         for i in range(len(indexlist)//minibatch_dim):
             l=[]
@@ -206,12 +229,13 @@ class TrainingSetCreator:
             yield l
     
     def getTrainingTestingIndices(self,training_percent,subset=[]):
-        '''
+        
         training_percent: is the percentage of training elements required, the remaining are testing
 
         returns two lists of indices train and test. in train[i] we have the indices of the training set of the dataset i
                 the remaining ones are testing set
-        '''
+
+
         retTrain=[]
         retTest=[]
         for datasetindex in range(len(self.names)):
@@ -229,6 +253,7 @@ class TrainingSetCreator:
             retTrain.append(indices[:training_quantity])
             retTest.append(indices[training_quantity:])
         return retTrain,retTest
+    '''
     
     def getValidIndices(self):
         valid_indices=[]
@@ -241,6 +266,11 @@ class TrainingSetCreator:
                 for patch in self.getPatchesFromDataset(datasetindex,[ipatch],onlyvalid=True):
                     if patch is not None:
                         valid_indices.append((datasetindex,ipatch))
+                        if(self.getrotated):
+                            totpatches=self.indacc[0] if datasetindex==0 else self.indacc[datasetindex]-self.indacc[datasetindex-1]
+                            for i in range(3):
+                                valid_indices.append((datasetindex,ipatch+(totpatches*(i+1))))
+
         return valid_indices
 
     def setTransform(self, oldinterval, newinterval):
@@ -275,11 +305,17 @@ if __name__=="__main__":
     regions={"a":(0,0,2,4),"b":(0,0,1,2)}
     target_dict={"a":1,"b":2}
     print(raw_data)
-    tsc=TrainingSetCreator(["a","b"],raw_data,regions,2,target_dict,step=1,transformdata=True,subtractmean=True)
+    tsc=TrainingSetCreator(["a","b"],raw_data,regions,2,target_dict,step=1
+                ,transformdata=False,subtractmean=False, getrotated=True, savepatches=True)
     #tsc.setTransform((0,15),(100,200))
     print(tsc.indacc)
     l=tsc.getValidIndices()
-    l = shuffleAndPartition(l,[1.0])[0]
+    #l = shuffleAndPartition(l,[1.0])[0]
+    for minibatch,targets in tsc.getMiniBatchesAndTargetsFromTupleList(l,2):
+        for i in range(len(minibatch)):
+            print(targets[i])
+            print(minibatch[i])
+        print("*********************")
     for minibatch,targets in tsc.getMiniBatchesAndTargetsFromTupleList(l,2):
         for i in range(len(minibatch)):
             print(targets[i])
