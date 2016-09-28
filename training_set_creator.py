@@ -27,7 +27,7 @@ class TrainingSetCreator:
         if(self.transformdata):
             def f(x):
                 return x
-            self.transform=np.vectorize(f,otypes=[np.float64])
+            self.transform=np.vectorize(f,otypes=[np.float32])
         self.subtractmean=subtractmean
         self.savepatches=savepatches
         self.patchdict={}
@@ -41,7 +41,11 @@ class TrainingSetCreator:
         '''
         #starts from 0
         count=0
-        i=0
+        if n>1 and len(self.indacc)>=(n-1):
+            i=n-1
+            count=self.indacc[n-2]
+        else:
+            i=0
         #for every dataset
         for key in self.names:
             #but only for the first n
@@ -159,7 +163,7 @@ class TrainingSetCreator:
                     yield patch
                     continue
                 if(self.subtractmean):
-                    a=np.mean(patch,dtype=np.float64)
+                    a=np.mean(patch,dtype=np.float32)
                     a=np.full(patch.shape,a)
                     patch=patch-a
                 #if self.max>patch.min():
@@ -186,6 +190,47 @@ class TrainingSetCreator:
             indexlist_list.append(range(self.indacc[0] if i==0 else self.indacc[i]-self.indacc[i-1]))
         for i,j in self.getPatches(indexlist_list):
             yield i,j
+    
+    def getMiniBatchesAndTargetsFromTupleList_sametest(self,indexlist, minibatch_dim):
+        #remove excess indexes
+        if(len(indexlist)%minibatch_dim)!=0:
+            indexlist=indexlist[:-(len(indexlist)%minibatch_dim)]
+        for i in range(len(indexlist)//minibatch_dim):
+            mb=[]
+            targets=[]
+            for datasetindex,ipatch in indexlist[i*minibatch_dim:(i+1)*minibatch_dim]:
+                patch=[]
+                for p in self.getPatchesFromDataset(datasetindex,[ipatch]):
+                    patch.append(p)
+                patch=patch[0]
+
+                if patch is not None:
+                    mb.append(patch)
+                    #0 se id pari, 1 se id dispari!
+                    targets.append(ipatch%2)
+                    
+            yield mb,targets
+
+    def getMiniBatchesAndTargetsFromTupleList_rottest(self,indexlist, minibatch_dim):
+        #remove excess indexes
+        if(len(indexlist)%minibatch_dim)!=0:
+            indexlist=indexlist[:-(len(indexlist)%minibatch_dim)]
+        for i in range(len(indexlist)//minibatch_dim):
+            mb=[]
+            targets=[]
+            for datasetindex,ipatch in indexlist[i*minibatch_dim:(i+1)*minibatch_dim]:
+                patch=[]
+                for p in self.getPatchesFromDataset(datasetindex,[ipatch]):
+                    patch.append(p)
+                patch=patch[0]
+
+                if patch is not None:
+                    mb.append(patch)
+                    #0 1 2 3 in base a rotazione
+                    totpatches=self.indacc[0] if datasetindex==0 else self.indacc[datasetindex]-self.indacc[datasetindex-1]
+                    targets.append(ipatch//totpatches)
+                    
+            yield mb,targets
 
     def getMiniBatchesAndTargetsFromTupleList(self,indexlist, minibatch_dim):
         #remove excess indexes
@@ -205,55 +250,6 @@ class TrainingSetCreator:
                     targets.append(self.target_dict[self.names[datasetindex]])
                     
             yield mb,targets
-    '''
-    def getMiniBatches(self, datasetindex, indexlist, minibatch_dim):
-        
-        datasetindex: the index in the self.names, indicates which dataset is considered
-        indexlist: is the list of indices which are requested
-        minibatch_dim: is the dimension of the single minibatch
-
-        by iterating on the call, a sequence of minibatches is returned
-        
-        #assert len(indexlist)%minibatch_dim==0
-        for i in range(len(indexlist)//minibatch_dim):
-            l=[]
-
-            if(((i+1)*minibatch_dim)>len(indexlist)):
-                for patch in self.getPatchesFromDataset(datasetindex, indexlist[i*minibatch_dim:]):
-                    if(patch is not None):
-                        l.append(patch)
-            else:
-                for patch in self.getPatchesFromDataset(datasetindex, indexlist[i*minibatch_dim:(i+1)*minibatch_dim]):
-                    if(patch is not None):
-                        l.append(patch)
-            yield l
-    
-    def getTrainingTestingIndices(self,training_percent,subset=[]):
-        
-        training_percent: is the percentage of training elements required, the remaining are testing
-
-        returns two lists of indices train and test. in train[i] we have the indices of the training set of the dataset i
-                the remaining ones are testing set
-
-
-        retTrain=[]
-        retTest=[]
-        for datasetindex in range(len(self.names)):
-            #the upper index limit is calculated using the accumulator indacc
-            if(subset==[]):
-                totpatches=self.indacc[0] if datasetindex==0 else self.indacc[datasetindex]-self.indacc[datasetindex-1]
-                indices = np.arange(totpatches)
-                np.random.shuffle(indices)
-                indices=indices.tolist()
-            else:
-                totpatches=len(subset[datasetindex])
-                indices=subset[datasetindex]
-            training_quantity=int(training_percent*totpatches)
-            testing_quantity=totpatches-training_quantity
-            retTrain.append(indices[:training_quantity])
-            retTest.append(indices[training_quantity:])
-        return retTrain,retTest
-    '''
     
     def getValidIndices(self):
         valid_indices=[]
@@ -282,7 +278,7 @@ class TrainingSetCreator:
         multiplier=(b2-a2)/(newb1)
         def transform(x):
             return ((x-a1)*multiplier)+a2
-        self.transform=np.vectorize(transform,otypes=[np.float64])
+        self.transform=np.vectorize(transform,otypes=[np.float32])
 
         
 
