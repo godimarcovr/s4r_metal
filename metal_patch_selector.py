@@ -6,7 +6,7 @@ import matplotlib.widgets as widgets
 
 class PatchSelector:
 
-    def __init__(self, filename, whitelist=[], allow_print=True):
+    def __init__(self, filename, whitelist=[], allow_print=True, allsame=False):
         '''
         Constructor. Takes the hdf5 file path, a whitelist of accepted subgroups (default [] which means all of them)
         and a boolean flag to suppress prints if set to False
@@ -18,6 +18,7 @@ class PatchSelector:
         self.mask={}
         self.names=[]
         self.allow_print=allow_print
+        self.allsame=allsame
         #for every subgroup
         for g in self.file:
             #empty whitelist means get everyone
@@ -53,7 +54,12 @@ class PatchSelector:
         x2=erelease.ydata
         y2=erelease.xdata
         self.selected_regions[self.current_k]=(int(x1),int(y1),int(x2),int(y2))
-        if self.images:
+        if self.allsame:
+            while self.images:
+                self.current_k,v=self.images.popitem()
+                self.selected_regions[self.current_k]=(int(x1),int(y1),int(x2),int(y2))
+            plt.close(self.figure)
+        elif self.images:
             plt.cla()
             self.current_k,v=self.images.popitem()
             #print sample info

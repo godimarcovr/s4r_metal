@@ -164,7 +164,7 @@ class TrainingSetCreator:
                     continue
                 if(self.subtractmean):
                     a=np.mean(patch,dtype=np.float32)
-                    a=np.full(patch.shape,a)
+                    a=np.full(patch.shape,a,dtype=np.float32)
                     patch=patch-a
                 #if self.max>patch.min():
                 #    self.max=patch.min()

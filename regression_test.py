@@ -58,7 +58,7 @@ class NNRegression:
         self.test_prediction=self.test_prediction[:,0]
         self.test_loss = lasagne.objectives.squared_error(self.test_prediction, self.target_var)
         self.test_loss = self.test_loss.mean()
-        self.test_acc = T.mean(T.le(T.pow(T.sub(self.test_prediction,self.target_var),2),0.01)
+        self.test_acc = T.mean(T.le(T.pow(T.sub(self.test_prediction,self.target_var),2),0.1)
                             , dtype=theano.config.floatX)
 
         self.train_fn = theano.function([self.input_var, self.target_var], self.loss, updates=self.updates)
@@ -141,10 +141,27 @@ def generateData(dim,num):
     return names,data,regions,targets
 
 
+def agingTest():
+    dim=32
+    p=mps.PatchSelector("../agingsamples.h5", allow_print=False,allsame=True)
+    regions=p.chooseRegions()
+    raw_data=p.data
+    target_dict={}
+    for i in p.names:
+        target_dict[i]=float(i[i.find("_")+1:])
 
-    
+    tsc=TrainingSetCreator(p.names,raw_data,regions,dim,target_dict,transformdata=True
+            ,subtractmean=True, getrotated=False, savepatches=True, step=dim)
+    tsc.setTransform((-0.4,0.4),(0.0,1.0))
+    print("Start NN creation")
+    #HO MESSO ERRORE PER L'ACCURATEZZA 0.1!!!
+    nn=NNRegression((None,1,dim,dim),1,[5],fully_con=[(512,0.5),(256,0.2)],num_filters=8)
+    print("NN created, starting training...")
+    nn.train2(tsc,1000,0.80,0.10,0.10)
 
 if __name__=="__main__":
+    agingTest()
+    '''
     dim=5
     names, raw_data, regions, target_dict = generateData((dim,dim),50000)
     #modificato tsc per ottimizzare indacc (e altro?)
@@ -155,7 +172,7 @@ if __name__=="__main__":
     print("NN created, starting training...")
     nn.train2(tsc,50,0.80,0.10,0.10)
 
-    '''
+    
     #2.0
     a=np.array([0.0,0.5,0.5,1.0]).reshape(2,2)
     a=a[np.newaxis,:,:]
@@ -180,9 +197,10 @@ if __name__=="__main__":
     print(a.sum())
     a=[a]
     print(nn.use(a))
-    '''
+    
     a=np.array(range(25)).reshape(5,5)
     a=a[np.newaxis,:,:]
     print(a.sum())
     a=[a]
     print(nn.use(a))
+    '''
