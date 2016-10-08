@@ -13,6 +13,15 @@ class NNRegression:
 
     def __init__(self, input_shape, num_outputs, patch_size_array, pooling_size_array=[]
                     , num_filters=32,fully_con=[]):
+        '''
+        input_shape: is a tuple that indicates the shape of the input to the network. Usually is (None,channels,rows,columns)
+                    (16x16 RGB images would be (None,3,16,16))
+        num_outputs: is the number of the outputs neurons to the network (usually number of classes)
+        patch_size_array: dimensions of the convolutional layers.
+        pooling_size_array: maxpooling size (must be [] or same size as patch_size_array)
+        num_filters: how many filters in each convolutional layer
+        fully_con: tuples (neurons, dropout rate) that describe the fullyconnected layers
+        '''
         assert (len(pooling_size_array)==0 or len(pooling_size_array)==len(patch_size_array))
         self.input_shape=input_shape
         self.num_outputs=num_outputs
@@ -24,6 +33,10 @@ class NNRegression:
         self.prepareTraining()
 
     def buildNN(self):
+        '''
+        Builds the network structure
+        (details on neural_net_creator's buildNN)
+        '''
         self.input_var = T.tensor4('inputs')
         self.target_var = T.fvector('targets')
         self.network = lasagne.layers.InputLayer(shape=self.input_shape, input_var=self.input_var)
@@ -43,10 +56,15 @@ class NNRegression:
                             num_units=self.num_outputs, nonlinearity=lasagne.nonlinearities.linear)
 
     def prepareTraining(self):
+        '''
+        Prepares the relevant functions
+        (details on neural_net_creator's prepareTraining)
+        '''
         #loss objective to minimize
         self.prediction = lasagne.layers.get_output(self.network)
         self.prediction=self.prediction[:,0]
         #self.loss = lasagne.objectives.categorical_crossentropy(self.prediction, self.target_var)
+        #the loss is now the squared error in the output
         self.loss =  lasagne.objectives.squared_error(self.prediction, self.target_var)
         self.loss = self.loss.mean()
 
@@ -58,6 +76,7 @@ class NNRegression:
         self.test_prediction=self.test_prediction[:,0]
         self.test_loss = lasagne.objectives.squared_error(self.test_prediction, self.target_var)
         self.test_loss = self.test_loss.mean()
+        #the accuracy is now the number of sample that achieve a 0.01 precision (can be changed)
         self.test_acc = T.mean(T.le(T.abs_(T.sub(self.test_prediction,self.target_var)),0.01)
                             , dtype=theano.config.floatX)
         self.test_acc2 = T.mean(T.le(T.abs_(T.sub(self.test_prediction,self.target_var)),0.05)
@@ -72,6 +91,10 @@ class NNRegression:
         self.use = theano.function([self.input_var],[self.test_prediction])
 
     def train2(self,tsc,num_epochs, training_percent, testing_percent, validation_percent):
+        '''
+        Given a TrainingSetCreator, a number of epochs and a partition of the training set, it trains the network
+        (details on NeuralNetworkCreator)
+        '''
         partitions=tscreator.shuffleAndPartition(tsc.getValidIndices(),[training_percent,testing_percent,validation_percent])
         training_set=partitions[0]
         testing_set=partitions[1]

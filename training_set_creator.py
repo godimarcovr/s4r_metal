@@ -14,6 +14,9 @@ class TrainingSetCreator:
         target_dict: dictionary with names as keys and their classification number as value
         getrotated:a flag that activates the artificial increase of data patches by rotating existing patches
         step: a integer that indicates how many pixels away should the next patch be
+        transformdata: enables the use of a function on the data to scale it in the desired range (method setTransform)
+        subtractmean: enables the subtraction of the average in each patch
+        savepatches: enables a cache to speedup the patch lookup but using a lot of memory
         '''
         self.data=raw_data
         self.names=names
@@ -24,6 +27,7 @@ class TrainingSetCreator:
         self.nPatch=[None]*(len(self.names))
         self.transformdata=transformdata
         self.getrotated=getrotated
+        #sets default identity function.
         if(self.transformdata):
             def f(x):
                 return x
@@ -80,21 +84,6 @@ class TrainingSetCreator:
         for i in range(len(self.names)):
             self.indacc.append(self.getNumberOfAccPatches(i+1))
 
-    '''
-    def patchBinarySearch(self,i,start,end):
-        
-        Currently not used, not even tested
-        
-        if(start>=end):
-            return start
-        if(start+1==end):
-            return start if i<=self.indacc[start] else end
-        if(self.indacc[(start+end)/2]<i):
-            return self.patchBinarySearch(i,((start+end)/2)+1,end)
-        return self.patchBinarySearch(i,start,(start+end)/2)
-    '''
-    
-
     def getPatchesFromDataset(self, datasetindex, indexlist, onlyvalid=False):
         '''
         Yields the patches corresponding to the indexes in indexlist starting from the datasetindex-th dataset
@@ -121,53 +110,66 @@ class TrainingSetCreator:
             #save result for faster computation
             self.nPatch[datasetindex]=(nRowsPatch,nColsPatch)
         else:
+            #number of rows and columns that are going to contain the start of a patch
             nRowsPatch,nColsPatch=self.nPatch[datasetindex]
             key=self.names[datasetindex]
             x1,y1,x2,y2=self.regions[key]
         
         patch_n_el=self.patch_dim*self.patch_dim
         for ind in indexlist:
+            #if i'm using cache
             if self.savepatches:
+                #and the patch is already in there
                 if (datasetindex,ind) in self.patchdict:
+                    #return it
                     yield self.patchdict[(datasetindex,ind)]
                     continue
                 else:
                     ind2=ind
+            #if i'm using rotations
             if self.getrotated:
                 totpatches=self.indacc[0] if datasetindex==0 else self.indacc[datasetindex]-self.indacc[datasetindex-1]
+                #calculate which rotation is this (if N patches, between N and 2N-1 is 90°, 2N:3N-1 is 180° and so on)
                 nRot=ind//totpatches
                 ind=ind%totpatches
-            #assert ind<totpatches
             riga=(ind//nColsPatch)*self.step
             colonna=(ind%nColsPatch)*self.step
-            #ritorna la patch
-            #TODO rifai con un solo yield patch in fondo e fai patch=None se serve
+            #if i'm using rotations
             if self.getrotated:
+                #rotate if needed
                 patch=self.data[key][x1+riga:x1+riga+self.patch_dim, y1+colonna:y1+colonna+self.patch_dim]
                 patch=np.rot90(patch,k=nRot)
                 patch=patch[np.newaxis,:,:]
             else:
+                #else the patch is just reading it
                 patch=self.data[key][np.newaxis, x1+riga:x1+riga+self.patch_dim, y1+colonna:y1+colonna+self.patch_dim]
+            #check if it has no null values
             if patch.size<patch_n_el or np.isnan(np.sum(patch)):
                 yield None
             else:
+                #if i want to transform it, i apply the transformation
                 if self.transformdata:
+                    #first i check if the values are in the specified range
                     if (not ((patch >= self.oldinterval[0]).all() and (patch <= self.oldinterval[1]).all())):
                         yield None
                         continue
+                    #if i only want validity, just return the patch
                     if(onlyvalid):
                         yield patch
                         continue
+                    #apply transformation
                     patch=self.transform(patch)
+                #if i only want validity, just return the patch
                 if(onlyvalid):
                     yield patch
                     continue
+                #if i want it normalized on the average
                 if(self.subtractmean):
+                    #calculate mean and subtract it to every value in the patch
                     a=np.mean(patch,dtype=np.float32)
                     a=np.full(patch.shape,a,dtype=np.float32)
                     patch=patch-a
-                #if self.max>patch.min():
-                #    self.max=patch.min()
+                #save it in the cache for future readings
                 if self.savepatches:
                     self.patchdict[(datasetindex,ind2)]=patch
                 yield patch
@@ -190,7 +192,8 @@ class TrainingSetCreator:
             indexlist_list.append(range(self.indacc[0] if i==0 else self.indacc[i]-self.indacc[i-1]))
         for i,j in self.getPatches(indexlist_list):
             yield i,j
-    
+    '''
+    #test function
     def getMiniBatchesAndTargetsFromTupleList_sametest(self,indexlist, minibatch_dim):
         #remove excess indexes
         if(len(indexlist)%minibatch_dim)!=0:
@@ -211,6 +214,7 @@ class TrainingSetCreator:
                     
             yield mb,targets
 
+    #test function
     def getMiniBatchesAndTargetsFromTupleList_rottest(self,indexlist, minibatch_dim):
         #remove excess indexes
         if(len(indexlist)%minibatch_dim)!=0:
@@ -232,26 +236,39 @@ class TrainingSetCreator:
                     
             yield mb,targets
 
+    '''
+
     def getMiniBatchesAndTargetsFromTupleList(self,indexlist, minibatch_dim):
+        '''
+        Returns patches and corresponding target values in minibatches of the specified dimension.
+        indexlist is a list of (datasetindex, patchindex) tuples
+        '''
         #remove excess indexes
         if(len(indexlist)%minibatch_dim)!=0:
             indexlist=indexlist[:-(len(indexlist)%minibatch_dim)]
+        #for every minibatch
         for i in range(len(indexlist)//minibatch_dim):
             mb=[]
             targets=[]
+            #take all the indexes in the minibatch
             for datasetindex,ipatch in indexlist[i*minibatch_dim:(i+1)*minibatch_dim]:
                 patch=[]
+                #for every index, get the matching patch
                 for p in self.getPatchesFromDataset(datasetindex,[ipatch]):
                     patch.append(p)
                 patch=patch[0]
 
                 if patch is not None:
                     mb.append(patch)
+                    #and the target
                     targets.append(self.target_dict[self.names[datasetindex]])
-                    
+            #return them
             yield mb,targets
     
     def getValidIndices(self):
+        '''
+        Returns the tuples (datasetindex,patchindex) that correspond to a valid patch (no missing values etc)
+        '''
         valid_indices=[]
         #for every dataset
         for datasetindex in range(len(self.names)):
@@ -270,6 +287,11 @@ class TrainingSetCreator:
         return valid_indices
 
     def setTransform(self, oldinterval, newinterval):
+        '''
+        Set a function to resize the values.
+        oldinterval is a (a,b) tuple that indicates the starting values
+        newinterval is a (a,b) tuple that indicates the desired range
+        '''
         self.oldinterval=oldinterval
         self.newinterval=newinterval
         a1,b1=oldinterval

@@ -9,7 +9,7 @@ class PatchSelector:
     def __init__(self, filename, whitelist=[], allow_print=True, allsame=False):
         '''
         Constructor. Takes the hdf5 file path, a whitelist of accepted subgroups (default [] which means all of them)
-        and a boolean flag to suppress prints if set to False
+        and a boolean flag to suppress prints if set to False and a boolean flag to take the same window in all of the samples.
         '''
         #read dataset
         self.file = h5py.File(filename, "r")
